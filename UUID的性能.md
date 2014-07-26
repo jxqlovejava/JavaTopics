@@ -1,10 +1,10 @@
-# UUID的性能
+## UUID的性能
 
-## 背景知识简单说明
+### 背景知识简单说明
 UUID含义是通用唯一识别码 (Universally Unique Identifier)，常用于分布式系统，比如作为消息唯一标识使用。
 JDK中也提供了获取UUID的API方法：java.util.UUID.randomUUID()。本文基于JDK7，不同JDK版本的UUID实现不太一样。
 
-## JDK中的UUID性能
+### JDK中的UUID性能
 先上测试代码：
 ```java
 import java.util.UUID;
@@ -32,9 +32,7 @@ public class UUIDPerformanceTest {
 }
 
 ```
-
 测试机器配置为CPU 2.9 GHz，内存8GB，得到的结果如下：
-
 ```html
 jdkUUIDTest: 
 Total time: 4464ms, average: 0.002232ms
