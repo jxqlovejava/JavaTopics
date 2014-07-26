@@ -41,9 +41,9 @@ Total time: 4464ms, average: 0.002232ms
 ```
 根据Google工程师Jeff Dean提供的那张性能数据图：
 
-![Performance Numbers][./imgs/Performance_Numbers.png]
+![Performance Numbers](./imgs/Performance_Numbers.png)
 
-平均每次大概2232纳秒，性能并不是很理想。
+平均每次UUID生成大概2232纳秒，差不多等于压缩1K数据的时间，性能确实不是很理想。
 
 为何这个操作会慢？网上有人说是因为UUID底层基于SecureRandom，而构造SecureRandom对象很慢，SecureRandom使用了操作系统的随机设备（Linux系统上是/dev/random）。我认可构造SecureRandom很慢，测试后发现构造一个SecureRandom对象大概388ns。我们继续看下UUID的源码：
 ```java
