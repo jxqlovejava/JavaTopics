@@ -2,7 +2,7 @@
 
 ### 背景知识简单说明
 近两周在为开放平台项目提供一个OAuth2服务端，生成appKey、appSecret时使用了JDK提供的UUID实现。
-UUID含义是通用唯一识别码 (Universally Unique Identifier)，常用于分布式系统，比如作为消息唯一标识使用。
+UUID含义是通用唯一识别码 (Universally Unique Identifier)，常用于分布式系统，比如作为消息唯一标识使用。关于UUID的几种生成算法，可以参考<a href="http://www.ietf.org/rfc/rfc4122.txt" target="_blank">rfc4122文档</a>
 JDK中也提供了获取UUID的API方法：java.util.UUID.randomUUID()。本文基于JDK7，不同JDK版本的UUID实现不太一样。
 
 ### JDK中的UUID性能
@@ -22,7 +22,7 @@ public class UUIDPerformanceTest {
 		}
 		long totalMillisElapsed = System.currentTimeMillis() - start;
 		System.out.println("Total time: " + (totalMillisElapsed) 
-				+ "ms, average: " + (double) totalMillisElapsed / RUN_TIMES + "ms");
+				+ "ms, average: " + (double) totalMillisElapsed * Math.pow(10, 6) / RUN_TIMES + "ns");
 		System.out.println();
 	}
 	
@@ -67,9 +67,9 @@ Total time: 4464ms, average: 0.002232ms
         return new UUID(randomBytes);
     }
 ```
-可以看到只有第一次调用randomUUID()时才会new一个SecureRandom对象，之后所有调用都直接使用这个构造好的SecureRandom对象。所以SecureRandom对象构造不是导致UUID性能的原因。退一步，就光从时间消耗数字上看，每一次randomUUID()调用的平均时间是2232ns，而构造一个SecureRandom对象只需要388ns，只是randomUUID的一个零头而已。
+可以看到只有第一次调用randomUUID()时才会new一个SecureRandom对象，之后所有调用都直接使用这个构造好的SecureRandom对象。所以SecureRandom对象构造慢不是导致UUID性能差的原因。退一步讲，就光从时间消耗数字上看，每一次randomUUID()调用的平均时间是2232ns，而构造一个SecureRandom对象只需要388ns，也只是randomUUID的一个零头而已。
 
-既然SecureRandom不是导致UUID性能差的罪魁祸首，那么我们继续看ng.nextBytes方法源码：
+既然SecureRandom不是导致UUID性能差的罪魁祸首，那么我们就继续看ng.nextBytes方法源码：
 ```
     /**
      * Generates a user-specified number of random bytes.
@@ -86,9 +86,9 @@ Total time: 4464ms, average: 0.002232ms
         secureRandomSpi.engineNextBytes(bytes);
     }
 ```
-一个synchronzied方法，可以推测在多线程并发访问环境下，UUID的性能将会更差。但测试代码是单线程，所以UUID性能差跟这个关系不大（可能会有一点关系，毕竟synchronized加了对象内置锁，每次执行这段代码前可能都要检查下）。为了保险起见，我还是去测试了一下空synchronized方法的执行耗时，大概为9ns，说明这个也还不是问题根源（至少单线程环境下是这样的）。
+这是一个synchronzied方法，可以推测在多线程并发访问环境下，UUID的性能将会更差。但测试代码是单线程，所以UUID性能差跟这个关系不大（可能会有一点关系，毕竟synchronized加了对象内置锁，每次执行这段代码前可能都要检查下）。为了保险起见，我还是去测试了一下空synchronized方法的执行耗时，大概为9ns，说明这个也还不是问题根源（至少单线程环境下是这样的）。
 
-于是性能差的原因基本确定是secureRandomSpi.engineNextBytes(bytes)了。那么有什么方法可以改善性能呢？有一个方法，将Random替换默认的SecureRandom，但这可能牺牲一定的随机性，代码如下：
+于是性能差的原因基本确定是secureRandomSpi.engineNextBytes(bytes)了。那有什么方法可以改善性能呢？有一个方法，将Random替换默认的SecureRandom，但这可能牺牲一定的随机性，代码如下：
 ```java
 import java.util.Random;
 import java.util.UUID;
