@@ -86,5 +86,67 @@ Total time: 4464ms, average: 0.002232ms
         secureRandomSpi.engineNextBytes(bytes);
     }
 ```
-一个synchronzied方法，可以推测在多线程并发访问环境下，UUID的性能更差。但测试代码是单线程，所以UUID性能差跟这个应该关系不大（可能会有一点关系，毕竟synchronized加了对象内置锁，每次执行这段代码前可能都要检查下）。
+一个synchronzied方法，可以推测在多线程并发访问环境下，UUID的性能将会更差。但测试代码是单线程，所以UUID性能差跟这个关系不大（可能会有一点关系，毕竟synchronized加了对象内置锁，每次执行这段代码前可能都要检查下）。为了保险起见，我还是去测试了一下空synchronized方法的执行耗时，大概为9ns，说明这个也还不是问题根源（至少单线程环境下是这样的）。
+
+于是性能差的原因基本确定是secureRandomSpi.engineNextBytes(bytes)了。那么有什么方法可以改善性能呢？有一个方法，将Random替换默认的SecureRandom，但这可能牺牲一定的随机性，代码如下：
+```java
+import java.util.Random;
+import java.util.UUID;
+
+public class UUIDPerformanceTest {
+	
+	private static final int RUN_TIMES = 2000000;   // 执行次数
+	
+	public static void jdkUUIDTest() {
+		System.out.println("jdkUUIDTest: ");
+		Random r = new Random();
+		long start = System.currentTimeMillis();
+		for(int i = 0; i < RUN_TIMES;i++) {
+			new UUID(r.nextLong(), r.nextLong());
+
+		}
+		long totalMillisElapsed = System.currentTimeMillis() - start;
+		System.out.println("Total time: " + (totalMillisElapsed) 
+				+ "ms, average: " + (double) totalMillisElapsed * Math.pow(10, 6) / RUN_TIMES + "ns");
+		System.out.println();
+	}
+	
+	public static void main(String[] args) {
+		jdkUUIDTest();
+	}
+
+}
+```
+得到的结果显示平均每次UUID生成大概54ns，相比最初的2232ns快了40多倍。另外还可以用外部全局唯一ID+MD5生成器来生成UUID，那样的话性能就跟外部全局唯一ID生成器的性能有关了。
+
+最后提下Random的一个缺陷，下面的代码每次输出都是一样的吗？
+```java
+import java.util.Random;
+
+public class RandomTest {
+	
+	public static void main(String[] args) {
+		Random rand = new Random(1000);
+		for (int j = 0; j < 5; j++) {
+			int nextRandom = rand.nextInt(5);
+			System.out.print(nextRandom + " ");
+		}
+	}
+}
+```
+答案是一样的，不管你运行多少次，输出都是：2 0 1 4 2 。原因在于Random的nextInt是基于一个数学公式+seed算出来的，使用的是一种叫做“线性同余伪随机数”的算法。具体来说如下：
+```html
+next方法通过原子更新seed为下面的值：
+
+(seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) – 1)
+
+然后返回：
+
+(int)(seed >>> (48 – bits)). 
+```
+默认的seed为自1970年1月1号到现在的毫秒数。
+
+所以我们还可以得出一个推论，如果两个Random使用相同的seed，那么他们通过调用next方法生成相同数目的随机数序列，一定是相同的，聪明的读者你可以自行去验证下，O(∩_∩)O
+
+
 
